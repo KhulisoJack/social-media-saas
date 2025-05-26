@@ -74,5 +74,6 @@ document.getElementById('api-login-btn').onclick = async function(e) {
         resultDiv.textContent = 'Error logging in';
     }
 };
+
 </script>
 @endsection

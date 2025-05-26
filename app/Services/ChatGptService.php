@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class ChatGptService
 {
@@ -17,11 +18,30 @@ class ChatGptService
             'messages' => [
                 [
                     'role' => 'system',
-                    'content' => "Generate 3 social media posts about: $topic. Respond with JSON: { options: [ {title: '', content: ''}, ... ]}"
+                    'content' => "You are a helpful assistant. Generate 3 creative social media posts about: $topic. Respond ONLY with valid JSON in this format: { \"options\": [ {\"title\": \"\", \"content\": \"\"}, ... ] }"
                 ]
             ]
         ]);
 
-        return json_decode($response->json('choices.0.message.content'), true)['options'];
+        // Log the entire response for debugging
+        Log::info('OpenAI full response:', ['response' => $response->json()]);
+        Log::info('OpenAI status:', ['status' => $response->status()]);
+        Log::info('OpenAI headers:', ['headers' => $response->headers()]);
+        Log::info('OpenAI body:', ['body' => $response->body()]);
+
+        // Check for API errors
+        if (!$response->ok()) {
+            throw new \Exception('OpenAI API error: ' . $response->body());
+        }
+
+        $content = $response->json('choices.0.message.content');
+        Log::info('OpenAI raw content:', ['content' => $content]);
+        $decoded = $content ? json_decode($content, true) : null;
+
+        if (is_array($decoded) && isset($decoded['options'])) {
+            return $decoded['options'];
+        }
+
+        throw new \Exception('OpenAI response did not contain options.');
     }
 }

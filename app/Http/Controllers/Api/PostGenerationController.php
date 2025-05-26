@@ -9,26 +9,29 @@ use Illuminate\Http\JsonResponse;
 
 class PostGenerationController extends Controller
 {
+    // Handles content generation requests
     public function generate(Request $request, ChatGptService $chatGpt): JsonResponse
     {
+        // Validate the incoming request to ensure 'topic' is present and valid
         $request->validate(['topic' => 'required|string|max:255']);
 
-        // Ensure the user is authenticated
-        $user = $request->user();
-        if (!$user) {
-            return response()->json(['error' => 'Unauthorized'], 401);
-        }
+        try {
+            // Generate content options using the ChatGptService
+            $options = $chatGpt->generateContent($request->topic);
 
-        // Generate content options
-        $options = $chatGpt->generateContent($request->topic);
-
-        // Log the generation request (if the relationship exists)
-        if (method_exists($user, 'generationRequests')) {
-            $user->generationRequests()->create([
-                'topic' => $request->topic,
+            // Save the generation request to the database for the authenticated user
+            $request->user()->generationRequests()->create([
+                'topic' => $request->topic
             ]);
-        }
 
-        return response()->json(['options' => $options]);
+            // Return the generated options as a JSON response
+            return response()->json(['options' => $options]);
+        } catch (\Exception $e) {
+            // If any error occurs, return a JSON error response with the exception message
+            return response()->json([
+                'error' => 'Content generation failed lol',
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 }
