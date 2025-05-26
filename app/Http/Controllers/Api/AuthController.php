@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 
 class AuthController
@@ -37,8 +38,10 @@ class AuthController
             ], 201);
         }
 
-        // Otherwise, redirect to login for Blade forms
-        return redirect('/login')->with('success', 'Registration successful! Please log in.');
+        // Otherwise, log in the user and redirect to dashboard for Blade forms
+        Auth::login($user);
+        $request->session()->regenerate();
+        return redirect('/dashboard')->with('success', 'Registration successful! Welcome!');
     }
 
     public function login(Request $request)
@@ -51,22 +54,40 @@ class AuthController
         $user = User::where('email', $request->email)->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
-            throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
+            if ($request->expectsJson()) {
+                throw ValidationException::withMessages([
+                    'email' => ['The provided credentials are incorrect.'],
+                ]);
+            }
+            return back()->withErrors([
+                'email' => 'The provided credentials do not match our records.',
             ]);
         }
 
-        return response()->json([
-            'token' => $user->createToken('auth_token')->plainTextToken,
-            'user' => $user
-        ]);
-        
+        // If the request expects JSON (API/AJAX), return token
+        if ($request->expectsJson()) {
+            return response()->json([
+                'token' => $user->createToken('auth_token')->plainTextToken,
+                'user' => $user
+            ]);
+        }
+
+        // Otherwise, log in the user and redirect to dashboard for Blade forms
+        Auth::login($user);
+        $request->session()->regenerate();
+        return redirect('/dashboard');
     }
 
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()->delete();
-        
-        return response()->json(['message' => 'Logged out successfully']);
+        if ($request->expectsJson()) {
+            $request->user()->currentAccessToken()->delete();
+            return response()->json(['message' => 'Logged out successfully']);
+        }
+
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+        return redirect('/login')->with('success', 'Logged out successfully');
     }
 }
